@@ -126,6 +126,14 @@ window.addEventListener('streetfighter:start-request', () => {
   requestRoundStart().catch(showError)
 })
 
+window.addEventListener('streetfighter:game-error', event => {
+  const message = String(event.detail?.message || 'The game could not start.')
+  fightOverlay.hidden = false
+  fightOverlay.querySelector('strong').textContent = 'Game failed to start'
+  fightOverlay.querySelector('span').textContent = message
+  showError(new Error(message))
+})
+
 for (const closeControl of document.querySelectorAll('[data-close-invoice]')) {
   closeControl.addEventListener('click', closeInvoiceDialog)
 }
@@ -190,6 +198,12 @@ async function renderGame() {
   joinFormColumn.hidden = response.canJoin !== true || !!state.player
   renderPlayers(response.players || [], state.player)
   updateFightOverlay(game, state.player)
+  if (game.status === 'active' && state.player && Number(game.roundStartAt || 0) > 0) {
+    scheduleRoundStart({
+      startAtMs: game.roundStartAt,
+      serverTimeMs: response.serverTimeMs
+    })
+  }
   await configureRealtime()
 }
 
@@ -324,7 +338,9 @@ async function configureRealtime() {
     state.inputPublishTimer = window.setInterval(publishLocalInput, 50)
   }
   if (state.player?.side === 'ryu' && !state.statePublishTimer) {
-    state.statePublishTimer = window.setInterval(publishAuthoritativeState, 100)
+    // A 50 ms cadence keeps the authoritative return trip responsive over
+    // real networks while remaining below the Core websocket rate limit.
+    state.statePublishTimer = window.setInterval(publishAuthoritativeState, 50)
   }
 }
 
@@ -341,15 +357,12 @@ async function requestRoundStart() {
   state.roundStarting = true
   window.STREETFIGHTER_ROUND_STARTING = true
   try {
-    const startMessage = {
-      type: 'start',
-      side: state.player.side,
-      startAtMs: Date.now() + 1500
-    }
-    scheduleRoundStart(startMessage)
-    await sendRealtimeOrHttp(startMessage, () => client.publishStart(state.gameId, {
+    // Starting is durable state, not merely a realtime hint. Persist it so a
+    // delayed or disconnected opponent still receives the same countdown.
+    const startMessage = await client.publishStart(state.gameId, {
       playerToken: playerToken()
-    }))
+    })
+    scheduleRoundStart(startMessage)
   } catch (error) {
     state.roundStarting = false
     window.STREETFIGHTER_ROUND_STARTING = false
@@ -360,7 +373,10 @@ async function requestRoundStart() {
 function scheduleRoundStart(data = {}) {
   if (state.roundStarted || state.game?.status !== 'active') return
   const startAtMs = Number(data.startAtMs || 0)
-  const localStartAtMs = startAtMs > 0 ? startAtMs : Date.now() + 1500
+  const serverTimeMs = Number(data.serverTimeMs || 0)
+  const delayMs = startAtMs > 0
+    ? Math.max(0, serverTimeMs > 0 ? startAtMs - serverTimeMs : startAtMs - Date.now())
+    : 1500
 
   if (state.roundStartTimeout) window.clearTimeout(state.roundStartTimeout)
   state.roundStarting = true
@@ -372,7 +388,7 @@ function scheduleRoundStart(data = {}) {
     window.dispatchEvent(new CustomEvent('streetfighter:start-match', {
       detail: {startAtMs: Date.now()}
     }))
-  }, Math.max(0, localStartAtMs - Date.now()))
+  }, delayMs)
 }
 
 function stopRealtime() {

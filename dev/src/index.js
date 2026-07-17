@@ -77,6 +77,7 @@ export function createStreetfighterGame(requestJson) {
       created_at: now,
       updated_at: now,
       started_at: null,
+      round_start_at: null,
       completed_at: null
     }
 
@@ -134,6 +135,7 @@ export function getPublicStreetfighterGame(requestJson) {
       players: publicPlayersFromGame(game),
       player: player ? publicPlayer(player, true) : null,
       canJoin: game.status === 'waiting' && Number(game.players_count || 0) < 2,
+      serverTimeMs: system.now() * 1000,
       realtimeReady: false
     }
   })
@@ -339,12 +341,20 @@ export function publishStreetfighterStart(requestJson) {
     const request = parseJsonObject(requestJson)
     const gameId = requiredText(request.gameId, 'gameId', 128)
     const token = requiredText(request.playerToken ?? request.player_token, 'playerToken', 128)
-    const game = applyWinnerClaim(getPublicGame(gameId), winnerClaimForGame(gameId), payoutReceiptForGame(gameId))
+    const game = applyWinnerClaim(getGame(gameId), winnerClaimForGame(gameId), payoutReceiptForGame(gameId))
     const player = requireActivePlayer(game, token)
     if (game.status !== 'active') throw new Error('Only active matches can be started.')
 
     const serverTimeMs = system.now() * 1000
-    const startAtMs = serverTimeMs + 2500
+    const existingStartAtMs = Number(game.round_start_at || 0)
+    const startAtMs = existingStartAtMs > 0 ? existingStartAtMs : serverTimeMs + 2500
+    if (existingStartAtMs <= 0) {
+      storage.set(GAMES_TABLE, {
+        ...game,
+        round_start_at: startAtMs,
+        updated_at: system.now()
+      })
+    }
     const message = {
       type: 'start',
       side: player.side,
@@ -769,6 +779,7 @@ function publicGame(game) {
     createdAt: Number(game.created_at || 0),
     updatedAt: Number(game.updated_at || 0),
     startedAt: Number(game.started_at || 0),
+    roundStartAt: Number(game.round_start_at || 0),
     completedAt: Number(game.completed_at || 0)
   }
 }
