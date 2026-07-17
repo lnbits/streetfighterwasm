@@ -2,7 +2,7 @@
   "id": "streetfighterwasm",
   "name": "StreetFighter",
   "short_description": "Create paid public StreetFighter matches where the winner takes the pot.",
-  "version": "0.0.19",
+  "version": "0.0.28",
   "min_lnbits_version": "1.5.6",
   "tile": "/streetfighterwasm/static/assets/tile.svg",
   "tags": ["gaming", "streetfighter", "wasm"],
@@ -68,6 +68,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -77,6 +81,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -99,6 +107,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -108,6 +120,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -117,6 +133,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -126,6 +146,10 @@
       "auth": "public",
       "path_params": {
         "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
       }
     },
     {
@@ -144,90 +168,8 @@
       "description": "Read StreetFighter settings, games, and player records."
     },
     {
-      "id": "ext.storage.read_public",
-      "description": "Read public StreetFighter game fields.",
-      "policies": [
-        {
-          "table_name": "streetfighter_games",
-          "public_fields": [
-            "id",
-            "settings_id",
-            "wallet_id",
-            "name",
-            "join_amount",
-            "haircut",
-            "players_count",
-            "status",
-            "ryu_ln_address",
-            "ken_ln_address",
-            "ryu_payment_hash",
-            "ken_payment_hash",
-            "winner_side",
-            "winner_ln_address",
-            "payout_pending",
-            "payout_status",
-            "created_at",
-            "updated_at",
-            "started_at",
-            "completed_at"
-          ]
-        },
-        {
-          "table_name": "streetfighter_winner_claims",
-          "source_id_field": "game_id",
-          "public_fields": [
-            "id",
-            "game_id",
-            "winner_side",
-            "winner_ln_address",
-            "payout_amount",
-            "created_at"
-          ]
-        },
-        {
-          "table_name": "streetfighter_payout_receipts",
-          "source_id_field": "game_id",
-          "public_fields": [
-            "id",
-            "game_id",
-            "winner_side",
-            "paid_at"
-          ]
-        }
-      ]
-    },
-    {
       "id": "ext.storage.write",
       "description": "Write StreetFighter settings, games, player records, and payment state."
-    },
-    {
-      "id": "ext.storage.append_public",
-      "description": "Allow a paid public fighter to submit one winner claim per match.",
-      "policies": [
-        {
-          "table": "streetfighter_winner_claims",
-          "source_table": "streetfighter_games",
-          "source_id_field": "game_id",
-          "allowed_fields": [
-            "winner_side",
-            "winner_ln_address",
-            "player_token",
-            "payout_amount",
-            "created_at"
-          ],
-          "max_rows_per_source": 1
-        },
-        {
-          "table": "streetfighter_payout_receipts",
-          "source_table": "streetfighter_games",
-          "source_id_field": "game_id",
-          "allowed_fields": [
-            "winner_side",
-            "paid_at"
-          ],
-          "max_rows_per_source": 1
-        }
-      ]
     },
     {
       "id": "wallet.list",
@@ -238,7 +180,7 @@
       "description": "Create public join invoices for configured StreetFighter wallets.",
       "policies": [
         {
-          "table": "streetfighter_settings",
+          "table": "streetfighter_games",
           "wallet_field": "wallet_id"
         }
       ]
@@ -256,7 +198,7 @@
       "description": "Broadcast StreetFighter match lifecycle messages through LNbits.",
       "policies": [
         {
-          "max_messages_per_second": 10
+          "max_messages_per_second": 60
         }
       ]
     },

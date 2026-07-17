@@ -100,7 +100,7 @@ const app = Vue.createApp({
         const response = await client.saveSettings({
           enabled: this.settings.enabled,
           walletId: this.effectiveWalletId,
-          haircut: Number(this.settings.haircut),
+          haircut: 0,
           walletName: this.selectedWalletName
         })
         this.settings = response.settings
@@ -284,18 +284,6 @@ const app = Vue.createApp({
                 popupContentClass: 'streetfighter-menu',
                 emitValue: true,
                 mapOptions: true
-              }),
-              h(q('QInput'), {
-                class: 'q-mt-md',
-                modelValue: this.settings.haircut,
-                'onUpdate:modelValue': value => (this.settings.haircut = value),
-                type: 'number',
-                label: 'Haircut %',
-                filled: true,
-                dense: true,
-                dark: true,
-                min: 0,
-                max: 100
               }),
               h(q('QBtn'), {
                 class: 'q-mt-md',

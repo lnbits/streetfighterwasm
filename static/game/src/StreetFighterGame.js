@@ -49,7 +49,19 @@ export class StreetFighterGame {
 
 	frame = (time) => {
 		window.requestAnimationFrame(this.frame.bind(this));
+		try {
+			this.runFrame(time);
+		} catch (error) {
+			console.error('[streetfighter] frame failed', error);
+			window.dispatchEvent(
+				new CustomEvent('streetfighter:game-error', {
+					detail: { message: error instanceof Error ? error.message : String(error) },
+				})
+			);
+		}
+	};
 
+	runFrame = (time) => {
 		if (this.timeStarted === 0) {
 			this.timeStarted = time;
 		}

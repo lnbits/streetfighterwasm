@@ -24,6 +24,8 @@
         {"name": "status", "type": "string"},
         {"name": "ryu_ln_address", "type": "string"},
         {"name": "ken_ln_address", "type": "string"},
+        {"name": "ryu_player_token", "type": "string"},
+        {"name": "ken_player_token", "type": "string"},
         {"name": "ryu_payment_hash", "type": "string"},
         {"name": "ken_payment_hash", "type": "string"},
         {"name": "winner_side", "type": "string"},
@@ -33,6 +35,7 @@
         {"name": "created_at", "type": "datetime"},
         {"name": "updated_at", "type": "datetime"},
         {"name": "started_at", "type": "datetime", "nullable": true},
+        {"name": "round_start_ms", "type": "integer", "nullable": true},
         {"name": "completed_at", "type": "datetime", "nullable": true}
       ]
     },
@@ -42,29 +45,11 @@
         {"name": "game_id", "type": "string"},
         {"name": "ln_address", "type": "string"},
         {"name": "payment_hash", "type": "string"},
+        {"name": "player_token", "type": "string"},
         {"name": "side", "type": "string"},
         {"name": "status", "type": "string"},
         {"name": "created_at", "type": "datetime"},
         {"name": "paid_at", "type": "datetime", "nullable": true}
-      ]
-    },
-    "streetfighter_winner_claims": {
-      "fields": [
-        {"name": "id", "type": "string"},
-        {"name": "game_id", "type": "string"},
-        {"name": "winner_side", "type": "string"},
-        {"name": "winner_ln_address", "type": "string"},
-        {"name": "player_token", "type": "string"},
-        {"name": "payout_amount", "type": "integer"},
-        {"name": "created_at", "type": "datetime"}
-      ]
-    },
-    "streetfighter_payout_receipts": {
-      "fields": [
-        {"name": "id", "type": "string"},
-        {"name": "game_id", "type": "string"},
-        {"name": "winner_side", "type": "string"},
-        {"name": "paid_at", "type": "datetime"}
       ]
     }
   },
@@ -72,7 +57,6 @@
     {"table": "streetfighter_games", "name": "streetfighter_games_by_settings", "field": "settings_id"},
     {"table": "streetfighter_players", "name": "streetfighter_players_by_game", "field": "game_id"},
     {"table": "streetfighter_players", "name": "streetfighter_players_by_payment_hash", "field": "payment_hash"},
-    {"table": "streetfighter_winner_claims", "name": "streetfighter_claims_by_game", "field": "game_id"},
-    {"table": "streetfighter_payout_receipts", "name": "streetfighter_receipts_by_game", "field": "game_id"}
+    {"table": "streetfighter_players", "name": "streetfighter_players_by_token", "field": "player_token"}
   ]
 }

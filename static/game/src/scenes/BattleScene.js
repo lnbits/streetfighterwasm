@@ -231,7 +231,10 @@ export class BattleScene {
 			})),
 	});
 
-	applyNetworkSnapshot = (snapshot = {}, { preserveAnimations = false } = {}) => {
+	applyNetworkSnapshot = (
+		snapshot = {},
+		{ preserveAnimations = false, localPlayerIndex = null } = {}
+	) => {
 		if (!snapshot || !Array.isArray(snapshot.fighters)) return;
 		const statusBar = this.getStatusBar();
 		if (statusBar && Number.isFinite(Number(snapshot.time))) {
@@ -242,7 +245,9 @@ export class BattleScene {
 			this.camera.position.x = Number(snapshot.camera.x ?? this.camera.position.x);
 			this.camera.position.y = Number(snapshot.camera.y ?? this.camera.position.y);
 		}
-		if (preserveAnimations) this.applyNetworkFireballs(snapshot.fireballs);
+		if (preserveAnimations) {
+			this.applyNetworkFireballs(snapshot.fireballs, localPlayerIndex);
+		}
 		this.battleEnded = snapshot.battleEnded === true;
 		this.winnerId =
 			snapshot.winnerId === null || snapshot.winnerId === undefined
@@ -252,18 +257,23 @@ export class BattleScene {
 		snapshot.fighters.slice(0, 2).forEach((fighterState, index) => {
 			const fighter = this.fighters[index];
 			if (!fighter || !fighterState) return;
-			fighter.position.x = Number(fighterState.position?.x ?? fighter.position.x);
-			fighter.position.y = Number(fighterState.position?.y ?? fighter.position.y);
-			fighter.velocity.x = Number(fighterState.velocity?.x ?? fighter.velocity.x);
-			fighter.velocity.y = Number(fighterState.velocity?.y ?? fighter.velocity.y);
-			fighter.direction = Number(fighterState.direction) < 0 ? -1 : 1;
-			fighter.victory = fighterState.victory === true;
-			if (!preserveAnimations && fighter.animations[fighterState.currentState]) {
-				fighter.currentState = fighterState.currentState;
-				fighter.setAnimationFrame(
-					Number(fighterState.animationFrame || 0),
-					{ previous: 0 }
-				);
+			const preserveLocalFighter = index === localPlayerIndex && !this.battleEnded;
+			if (!preserveLocalFighter) {
+				fighter.position.x = Number(fighterState.position?.x ?? fighter.position.x);
+				fighter.position.y = Number(fighterState.position?.y ?? fighter.position.y);
+				fighter.velocity.x = Number(fighterState.velocity?.x ?? fighter.velocity.x);
+				fighter.velocity.y = Number(fighterState.velocity?.y ?? fighter.velocity.y);
+				fighter.direction = Number(fighterState.direction) < 0 ? -1 : 1;
+				fighter.victory = fighterState.victory === true;
+				if (!preserveAnimations && fighter.animations[fighterState.currentState]) {
+					fighter.currentState = fighterState.currentState;
+					fighter.setAnimationFrame(
+						Number(fighterState.animationFrame || 0),
+						{ previous: 0 }
+					);
+				}
+			} else {
+				this.correctLocalFighterDrift(fighter, fighterState);
 			}
 			gameState.fighters[index].hitPoints = Number(
 				fighterState.hitPoints ?? gameState.fighters[index].hitPoints
@@ -281,6 +291,18 @@ export class BattleScene {
 		}
 	};
 
+	correctLocalFighterDrift = (fighter, fighterState = {}) => {
+		const authoritativeX = Number(fighterState.position?.x);
+		const authoritativeY = Number(fighterState.position?.y);
+		if (!Number.isFinite(authoritativeX) || !Number.isFinite(authoritativeY)) return;
+		const dx = authoritativeX - fighter.position.x;
+		const dy = authoritativeY - fighter.position.y;
+		const distance = Math.hypot(dx, dy);
+		if (distance < 70) return;
+		fighter.position.x += dx * 0.35;
+		fighter.position.y += dy * 0.35;
+	};
+
 	applyNetworkFinish = () => {
 		if (this.winnerId !== 0 && this.winnerId !== 1) return;
 		const loserId = 1 - this.winnerId;
@@ -291,8 +313,13 @@ export class BattleScene {
 		this.goToStartScene();
 	};
 
-	applyNetworkFireballs = (states = []) => {
-		const fireballs = Array.isArray(states) ? states : [];
+	applyNetworkFireballs = (states = [], localPlayerIndex = null) => {
+		const fireballs = Array.isArray(states)
+			? states.filter((state) => {
+				const ownerId = Number(state?.ownerId);
+				return this.battleEnded || ownerId !== localPlayerIndex;
+			})
+			: [];
 		const ownerIds = new Set(
 			fireballs
 				.map((state) => Number(state?.ownerId))

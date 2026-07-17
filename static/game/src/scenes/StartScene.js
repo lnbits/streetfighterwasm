@@ -17,6 +17,7 @@ export class StartScene {
 
 	endStartScene = () => {
 		if (!window.STREETFIGHTER_CAN_PLAY || window.STREETFIGHTER_ROUND_STARTING) return;
+		if (window.STREETFIGHTER_IS_AUTHORITY !== true) return;
 		window.dispatchEvent(new CustomEvent('streetfighter:start-request'));
 	};
 
@@ -63,7 +64,9 @@ export class StartScene {
 		const text = window.STREETFIGHTER_CAN_PLAY
 			? window.STREETFIGHTER_ROUND_STARTING
 				? 'GET READY'
-				: 'CLICK ANYWHERE TO START'
+				: window.STREETFIGHTER_IS_AUTHORITY === true
+					? 'CLICK ANYWHERE TO START'
+					: 'WAITING FOR RYU TO START'
 			: window.STREETFIGHTER_MATCH_ENDED
 				? 'MATCH FINISHED'
 				: 'PAY TO FIGHT - STAGE LOCKED';

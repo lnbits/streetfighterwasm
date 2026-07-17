@@ -15,6 +15,7 @@ const state = {
   roundStartTimeout: null,
   roundStarting: false,
   roundStarted: false,
+  serverClockOffsetMs: 0,
   stateSequence: 0,
   lastAppliedStateSequence: 0,
   lastInputJson: '',
@@ -24,12 +25,15 @@ const state = {
 }
 
 const GAME_POLL_INTERVAL_MS = 1000
+const INPUT_PUBLISH_INTERVAL_MS = 33
+const STATE_PUBLISH_INTERVAL_MS = 33
 
 window.STREETFIGHTER_CAN_PLAY = false
 window.STREETFIGHTER_LOCAL_SIDE = ''
 window.STREETFIGHTER_LOCAL_PLAYER_INDEX = null
 window.STREETFIGHTER_MATCH_ENDED = false
 window.STREETFIGHTER_ROUND_STARTING = false
+window.STREETFIGHTER_IS_AUTHORITY = false
 
 const client = window.createLNbitsExtensionClient({
   extensionId: 'streetfighterwasm'
@@ -62,12 +66,12 @@ joinButton.addEventListener('click', async event => {
   event.preventDefault()
   setJoinLoading(true)
   try {
-    const invoice = await client.joinGame(state.gameId, {
+    const invoice = normalizeJoinInvoice(await client.joinGame(state.gameId, {
       lnAddress: fieldValue(joinForm, 'lnAddress')
-    })
-    savePlayerToken(invoice.paymentHash)
+    }))
+    savePlayerToken(invoice.playerToken)
     openInvoiceDialog(invoice)
-    startInvoicePolling(invoice.paymentHash)
+    startInvoicePolling(invoice.playerToken)
     await subscribeToPayment(invoice.paymentHash)
   } catch (error) {
     showError(error)
@@ -187,6 +191,9 @@ async function renderGame() {
   const response = await client.getPublicGame(state.gameId, playerToken())
   const game = localCompletedGame(response?.game)
   if (!game) throw new Error('StreetFighter match not found.')
+  if (Number(response.serverTimeMs || 0) > 0) {
+    state.serverClockOffsetMs = Number(response.serverTimeMs) - Date.now()
+  }
   state.game = game
   state.player = response.player || null
   gameTitle.textContent = game.name
@@ -194,7 +201,7 @@ async function renderGame() {
   gameStatus.textContent = statusText(game, state.player)
   playersStat.textContent = `${game.playersCount} / 2`
   amountStat.textContent = `${game.joinAmount} sats`
-  haircutStat.textContent = `${game.haircut}%`
+  haircutStat.textContent = 'winner takes all'
   joinFormColumn.hidden = response.canJoin !== true || !!state.player
   renderPlayers(response.players || [], state.player)
   updateFightOverlay(game, state.player)
@@ -261,6 +268,7 @@ function updateFightOverlay(game, player) {
     fightOverlay.hidden = true
     window.STREETFIGHTER_LOCAL_SIDE = player.side
     window.STREETFIGHTER_LOCAL_PLAYER_INDEX = player.side === 'ken' ? 1 : 0
+    window.STREETFIGHTER_IS_AUTHORITY = player.side === 'ryu'
     window.STREETFIGHTER_CAN_PLAY = true
     window.STREETFIGHTER_MATCH_ENDED = false
     return
@@ -335,12 +343,16 @@ async function configureRealtime() {
   }
 
   if (!state.inputPublishTimer) {
-    state.inputPublishTimer = window.setInterval(publishLocalInput, 50)
+    state.inputPublishTimer = window.setInterval(
+      publishLocalInput,
+      INPUT_PUBLISH_INTERVAL_MS
+    )
   }
   if (state.player?.side === 'ryu' && !state.statePublishTimer) {
-    // A 50 ms cadence keeps the authoritative return trip responsive over
-    // real networks while remaining below the Core websocket rate limit.
-    state.statePublishTimer = window.setInterval(publishAuthoritativeState, 50)
+    state.statePublishTimer = window.setInterval(
+      publishAuthoritativeState,
+      STATE_PUBLISH_INTERVAL_MS
+    )
   }
 }
 
@@ -349,6 +361,7 @@ async function requestRoundStart() {
     state.roundStarting ||
     state.roundStarted ||
     state.game?.status !== 'active' ||
+    state.player?.side !== 'ryu' ||
     !state.player ||
     !playerToken()
   ) {
@@ -373,10 +386,8 @@ async function requestRoundStart() {
 function scheduleRoundStart(data = {}) {
   if (state.roundStarted || state.game?.status !== 'active') return
   const startAtMs = Number(data.startAtMs || 0)
-  const serverTimeMs = Number(data.serverTimeMs || 0)
-  const delayMs = startAtMs > 0
-    ? Math.max(0, serverTimeMs > 0 ? startAtMs - serverTimeMs : startAtMs - Date.now())
-    : 1500
+  const serverNowMs = Date.now() + Number(state.serverClockOffsetMs || 0)
+  const delayMs = startAtMs > 0 ? Math.max(0, startAtMs - serverNowMs) : 1500
 
   if (state.roundStartTimeout) window.clearTimeout(state.roundStartTimeout)
   state.roundStarting = true
@@ -404,6 +415,7 @@ function stopRealtime() {
   state.stateSequence = 0
   state.lastAppliedStateSequence = 0
   window.STREETFIGHTER_ROUND_STARTING = false
+  window.STREETFIGHTER_IS_AUTHORITY = false
   state.lastInputJson = ''
   window.STREETFIGHTER_INPUT?.clearRemoteInputs?.()
 }
@@ -449,6 +461,7 @@ function lockLocalFight(side = window.STREETFIGHTER_LOCAL_SIDE || '', ended = tr
   window.STREETFIGHTER_CAN_PLAY = false
   window.STREETFIGHTER_LOCAL_SIDE = side
   window.STREETFIGHTER_LOCAL_PLAYER_INDEX = null
+  window.STREETFIGHTER_IS_AUTHORITY = false
   window.STREETFIGHTER_MATCH_ENDED = ended === true
   window.STREETFIGHTER_INPUT?.clearRemoteInputs?.()
 }
@@ -565,7 +578,8 @@ function applyAuthoritativeState(snapshot) {
   if (sequence && sequence <= state.lastAppliedStateSequence) return
   if (sequence) state.lastAppliedStateSequence = sequence
   window.STREETFIGHTER_BATTLE.applyNetworkSnapshot(snapshot, {
-    preserveAnimations: true
+    preserveAnimations: true,
+    localPlayerIndex: state.player?.side === 'ken' ? 1 : 0
   })
 }
 
@@ -680,6 +694,17 @@ function renderQr(value) {
   state.qrApp.mount(invoiceQrCode)
 }
 
+function normalizeJoinInvoice(invoice = {}) {
+  const paymentHash = invoice.paymentHash || invoice.payment_hash || ''
+  const playerToken = invoice.playerToken || invoice.player_token || paymentHash
+  return {
+    ...invoice,
+    playerToken,
+    paymentHash,
+    paymentRequest: invoice.paymentRequest || invoice.payment_request || ''
+  }
+}
+
 async function subscribeToPayment(paymentHash) {
   if (!paymentHash) return
   try {
@@ -704,12 +729,12 @@ async function subscribeToPayment(paymentHash) {
   }
 }
 
-function startInvoicePolling(paymentHash) {
+function startInvoicePolling(playerToken) {
   if (state.invoicePollTimer) window.clearInterval(state.invoicePollTimer)
   state.invoicePollTimer = window.setInterval(async () => {
     try {
       await renderGame()
-      if (state.player?.id === paymentHash) closeInvoiceDialog()
+      if (state.player?.id === playerToken) closeInvoiceDialog()
     } catch (error) {
       console.warn('[streetfighterwasm public] invoice poll failed', error)
     }
@@ -721,11 +746,11 @@ function setJoinLoading(loading) {
   joinButton.classList.toggle('is-loading', loading)
 }
 
-function savePlayerToken(paymentHash) {
+function savePlayerToken(playerToken) {
   const url = new URL(window.location.href)
-  url.searchParams.set('playerToken', paymentHash)
+  url.searchParams.set('playerToken', playerToken)
   window.history.replaceState({}, '', url)
-  state.playerToken = paymentHash
+  state.playerToken = playerToken
 }
 
 function tokenFromUrl() {
