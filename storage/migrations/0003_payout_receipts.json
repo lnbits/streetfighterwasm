@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "Track successful public winner payouts separately from one-shot winner claims.",
+  "operations": [
+    {
+      "op": "create_table",
+      "table": "streetfighter_payout_receipts",
+      "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "game_id", "type": "string"},
+        {"name": "winner_side", "type": "string"},
+        {"name": "paid_at", "type": "datetime"}
+      ]
+    },
+    {
+      "op": "create_index",
+      "table": "streetfighter_payout_receipts",
+      "name": "streetfighter_receipts_by_game",
+      "field": "game_id"
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StreetFighter</title>
+    <link rel="stylesheet" href="/ext-assets/streetfighterwasm/_lnbits/bundle.min.css" />
+    <link rel="stylesheet" href="/ext-assets/streetfighterwasm/_lnbits/material-icons.css" />
+    <link rel="stylesheet" href="/ext-assets/streetfighterwasm/app.css" />
+  </head>
+  <body data-theme="bitcoin" class="body--dark streetfighter-body">
+    <main class="fight-shell q-pa-md" data-theme="bitcoin">
+      <header class="fight-header row items-center justify-between q-mb-md q-gutter-md">
+        <div class="row items-center q-gutter-sm">
+          <div class="streetfighter-mark" aria-hidden="true">SF</div>
+          <div>
+            <h1 class="text-h4 text-weight-bold q-my-none">StreetFighter</h1>
+            <p id="game-subtitle" class="text-subtitle2 text-grey-5 q-my-none">
+              Paid public fight.
+            </p>
+          </div>
+        </div>
+        <button id="copy-game-button" class="q-btn subtle-button" type="button">
+          Copy Link
+        </button>
+      </header>
+
+      <section class="fight-layout">
+        <div class="fight-panel panel q-card q-card--dark q-pa-md">
+          <div class="game-topline">
+            <div>
+              <h2 id="game-title" class="text-h5 text-weight-bold q-my-none">Loading...</h2>
+              <p id="game-status" class="muted q-mb-none q-mt-xs">Loading match</p>
+            </div>
+          </div>
+
+          <div id="fight-stage-shell" class="fight-stage-shell">
+            <canvas width="382" height="224" aria-label="StreetFighter stage"></canvas>
+            <button
+              id="sound-toggle"
+              class="sound-toggle"
+              type="button"
+              aria-label="Mute game sound"
+              aria-pressed="false"
+              title="Mute sound"
+            >
+              volume_up
+            </button>
+            <div id="fight-overlay" class="fight-overlay">
+              <strong>Waiting for two paid players</strong>
+              <span>Pay the join invoice to lock in your fighter.</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="side-panel panel q-card q-card--dark q-pa-md">
+          <div id="join-form-column">
+            <h2 class="text-h6 text-weight-bold q-my-none q-mb-md">Join Match</h2>
+            <div id="join-form" class="form q-gutter-md">
+              <label>
+                <span class="text-caption text-grey-5">Lightning address</span>
+                <input name="lnAddress" placeholder="you@example.com" required />
+              </label>
+              <button id="join-button" class="q-btn bg-primary text-white full-width" type="button">
+                <span class="button-spinner" aria-hidden="true"></span>
+                <span class="button-label">Pay to Fight</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="stats q-mt-md">
+            <div class="stat-item">
+              <span class="text-caption text-grey-5">Players</span>
+              <strong id="players-stat">0 / 2</strong>
+            </div>
+            <div class="stat-item">
+              <span class="text-caption text-grey-5">Join amount</span>
+              <strong id="amount-stat">0 sats</strong>
+            </div>
+            <div class="stat-item">
+              <span class="text-caption text-grey-5">Haircut</span>
+              <strong id="haircut-stat">0%</strong>
+            </div>
+          </div>
+
+          <div class="q-mt-md">
+            <h3 class="text-subtitle1 text-weight-bold q-my-none q-mb-sm">Players</h3>
+            <div id="player-list" class="player-list"></div>
+          </div>
+
+          <div class="q-mt-md trollbox">
+            <h3 class="text-subtitle1 text-weight-bold q-my-none q-mb-sm">Troll Box</h3>
+            <div id="chat-list" class="chat-list">
+              <p class="muted q-my-none">Paid fighters can chat here.</p>
+            </div>
+            <div class="chat-compose q-mt-sm">
+              <input id="chat-input" placeholder="Talk trash..." maxlength="160" />
+              <button id="chat-button" class="q-btn subtle-button" type="button">Send</button>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <div
+        id="invoice-dialog"
+        class="invoice-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invoice-dialog-title"
+        hidden
+      >
+        <button
+          class="invoice-dialog-backdrop"
+          type="button"
+          aria-label="Close invoice"
+          data-close-invoice
+        ></button>
+        <div class="invoice-dialog-card panel q-card q-card--dark q-pa-md">
+          <div class="row items-center justify-between q-mb-md">
+            <h2 id="invoice-dialog-title" class="text-h6 text-weight-bold q-my-none">
+              Pay Invoice
+            </h2>
+            <button class="invoice-close-button q-btn text-grey-5" type="button" data-close-invoice>
+              Close
+            </button>
+          </div>
+          <div id="invoice-qrcode" class="invoice-qrcode"></div>
+          <p id="invoice-status" class="invoice-status muted">Waiting for payment</p>
+          <button id="copy-invoice-button" class="q-btn invoice-copy-button text-grey-2" type="button">
+            Copy Invoice
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <audio id="kensTheme" src="/ext-assets/streetfighterwasm/game/public/sounds/kens-theme.ogg" preload="auto" loop></audio>
+    <audio id="sound-fighter-land" src="/ext-assets/streetfighterwasm/game/public/sounds/land.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-light-kick-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/light-kick-hit.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-medium-kick-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/medium-kick-hit.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-heavy-kick-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/heavy-kick-hit.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-light-attack" src="/ext-assets/streetfighterwasm/game/public/sounds/light-attack.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-medium-attack" src="/ext-assets/streetfighterwasm/game/public/sounds/medium-attack.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-heavy-attack" src="/ext-assets/streetfighterwasm/game/public/sounds/heavy-attack.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-light-punch-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/light-punch-hit.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-medium-punch-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/medium-punch-hit.ogg" preload="auto"></audio>
+    <audio id="sound-fighter-heavy-punch-hit" src="/ext-assets/streetfighterwasm/game/public/sounds/heavy-punch-hit.ogg" preload="auto"></audio>
+    <audio id="sound-ken-hadouken" src="/ext-assets/streetfighterwasm/game/public/sounds/hadouken.ogg" preload="auto"></audio>
+    <audio id="sound-ryu-hadouken" src="/ext-assets/streetfighterwasm/game/public/sounds/hadouken.ogg" preload="auto"></audio>
+
+    <img id="KenStage" src="/ext-assets/streetfighterwasm/game/public/images/kenstage.png" alt="kenstage" />
+    <img id="hud" src="/ext-assets/streetfighterwasm/game/public/images/hud.png" alt="HUD" />
+    <img id="KenImage" src="/ext-assets/streetfighterwasm/game/public/images/Ken.png" alt="Ken" />
+    <img id="RyuImage" src="/ext-assets/streetfighterwasm/game/public/images/Ryu.png" alt="Ryu" />
+    <img id="ShadowImage" src="/ext-assets/streetfighterwasm/game/public/images/shadow.png" alt="Shadow" />
+    <img id="Decals" src="/ext-assets/streetfighterwasm/game/public/images/decals.png" alt="Decals" />
+    <img id="Logo" src="/ext-assets/streetfighterwasm/game/public/images/logo.png" alt="Logo" />
+    <img id="Winner" src="/ext-assets/streetfighterwasm/game/public/images/winnerText.png" alt="Winner" />
+
+    <script src="/ext-assets/streetfighterwasm/_lnbits/vue.global.prod.js"></script>
+    <script src="/ext-assets/streetfighterwasm/_lnbits/qrcode.vue.browser.js"></script>
+    <script src="/ext-assets/streetfighterwasm/lnbits-extension-sdk.js"></script>
+    <script src="/ext-assets/streetfighterwasm/public.js"></script>
+    <script type="module" src="/ext-assets/streetfighterwasm/game/src/index.js"></script>
+  </body>
+</html>

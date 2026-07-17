@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "operations": [
+    {
+      "op": "create_table",
+      "table": "streetfighter_settings",
+      "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "wallet_id", "type": "string"},
+        {"name": "wallet_name", "type": "string"},
+        {"name": "enabled", "type": "boolean"},
+        {"name": "haircut", "type": "number"},
+        {"name": "created_at", "type": "datetime"},
+        {"name": "updated_at", "type": "datetime"}
+      ]
+    },
+    {
+      "op": "create_table",
+      "table": "streetfighter_games",
+      "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "settings_id", "type": "string"},
+        {"name": "name", "type": "string"},
+        {"name": "join_amount", "type": "integer"},
+        {"name": "haircut", "type": "number"},
+        {"name": "players_count", "type": "integer"},
+        {"name": "status", "type": "string"},
+        {"name": "ryu_ln_address", "type": "string"},
+        {"name": "ken_ln_address", "type": "string"},
+        {"name": "ryu_payment_hash", "type": "string"},
+        {"name": "ken_payment_hash", "type": "string"},
+        {"name": "winner_side", "type": "string"},
+        {"name": "winner_ln_address", "type": "string"},
+        {"name": "payout_pending", "type": "boolean"},
+        {"name": "payout_status", "type": "string"},
+        {"name": "created_at", "type": "datetime"},
+        {"name": "updated_at", "type": "datetime"},
+        {"name": "started_at", "type": "datetime", "nullable": true},
+        {"name": "completed_at", "type": "datetime", "nullable": true}
+      ]
+    },
+    {
+      "op": "create_table",
+      "table": "streetfighter_players",
+      "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "game_id", "type": "string"},
+        {"name": "ln_address", "type": "string"},
+        {"name": "payment_hash", "type": "string"},
+        {"name": "side", "type": "string"},
+        {"name": "status", "type": "string"},
+        {"name": "created_at", "type": "datetime"},
+        {"name": "paid_at", "type": "datetime", "nullable": true}
+      ]
+    },
+    {"op": "create_index", "table": "streetfighter_games", "name": "streetfighter_games_by_settings", "field": "settings_id"},
+    {"op": "create_index", "table": "streetfighter_players", "name": "streetfighter_players_by_game", "field": "game_id"},
+    {"op": "create_index", "table": "streetfighter_players", "name": "streetfighter_players_by_payment_hash", "field": "payment_hash"}
+  ]
+}

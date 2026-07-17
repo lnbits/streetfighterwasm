@@ -1,0 +1,268 @@
+{
+  "id": "streetfighterwasm",
+  "name": "StreetFighter",
+  "short_description": "Create paid public StreetFighter matches where the winner takes the pot.",
+  "version": "0.0.15",
+  "min_lnbits_version": "1.5.6",
+  "tile": "/streetfighterwasm/static/assets/tile.svg",
+  "tags": ["gaming", "streetfighter", "wasm"],
+  "extension_type": "wasm",
+  "wasm": {
+    "module": "wasm/module.wasm",
+    "world": "streetfighterwasm",
+    "exports": [
+      {"name": "get-streetfighter-settings", "visibility": "authenticated"},
+      {"name": "save-streetfighter-settings", "visibility": "authenticated"},
+      {"name": "list-streetfighter-wallets", "visibility": "authenticated"},
+      {"name": "create-streetfighter-game", "visibility": "authenticated"},
+      {"name": "list-streetfighter-games", "visibility": "authenticated"},
+      {"name": "delete-streetfighter-game", "visibility": "authenticated"},
+      {"name": "get-public-streetfighter-game", "visibility": "public"},
+      {"name": "join-streetfighter-game", "visibility": "public"},
+      {"name": "declare-streetfighter-winner", "visibility": "public"},
+      {"name": "publish-streetfighter-start", "visibility": "public"},
+      {"name": "publish-streetfighter-input", "visibility": "public"},
+      {"name": "publish-streetfighter-state", "visibility": "public"},
+      {"name": "publish-streetfighter-chat", "visibility": "public"},
+      {"name": "settle-streetfighter-game", "visibility": "authenticated"},
+      {"name": "record-streetfighter-payment", "visibility": "event"}
+    ]
+  },
+  "events": {
+    "onInvoicePaid": "record-streetfighter-payment"
+  },
+  "ui_routes": [
+    {
+      "path": "/streetfighterwasm",
+      "entrypoint": "ui/admin.html",
+      "auth": "user"
+    },
+    {
+      "path": "/streetfighterwasm/games/{game_id}",
+      "entrypoint": "ui/public.html",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    }
+  ],
+  "api_routes": [
+    {"method": "GET", "path": "/settings", "export": "get-streetfighter-settings", "auth": "user"},
+    {"method": "PUT", "path": "/settings", "export": "save-streetfighter-settings", "auth": "user"},
+    {"method": "GET", "path": "/wallets", "export": "list-streetfighter-wallets", "auth": "user"},
+    {"method": "POST", "path": "/games", "export": "create-streetfighter-game", "auth": "user"},
+    {"method": "GET", "path": "/games", "export": "list-streetfighter-games", "auth": "user"},
+    {
+      "method": "DELETE",
+      "path": "/games/{game_id}",
+      "export": "delete-streetfighter-game",
+      "auth": "user",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/games/{game_id}",
+      "export": "get-public-streetfighter-game",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/join",
+      "export": "join-streetfighter-game",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/winner",
+      "export": "declare-streetfighter-winner",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      },
+      "ownerContext": {
+        "table": "streetfighter_games",
+        "idParam": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/input",
+      "export": "publish-streetfighter-input",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/start",
+      "export": "publish-streetfighter-start",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/state",
+      "export": "publish-streetfighter-state",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/chat",
+      "export": "publish-streetfighter-chat",
+      "auth": "public",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/games/{game_id}/settle",
+      "export": "settle-streetfighter-game",
+      "auth": "user",
+      "path_params": {
+        "game_id": "gameId"
+      }
+    }
+  ],
+  "permissions": [
+    {
+      "id": "ext.storage.read",
+      "description": "Read StreetFighter settings, games, and player records."
+    },
+    {
+      "id": "ext.storage.read_public",
+      "description": "Read public StreetFighter game fields.",
+      "policies": [
+        {
+          "table_name": "streetfighter_games",
+          "public_fields": [
+            "id",
+            "settings_id",
+            "wallet_id",
+            "name",
+            "join_amount",
+            "haircut",
+            "players_count",
+            "status",
+            "ryu_ln_address",
+            "ken_ln_address",
+            "ryu_payment_hash",
+            "ken_payment_hash",
+            "winner_side",
+            "winner_ln_address",
+            "payout_pending",
+            "payout_status",
+            "created_at",
+            "updated_at",
+            "started_at",
+            "completed_at"
+          ]
+        },
+        {
+          "table_name": "streetfighter_winner_claims",
+          "source_id_field": "game_id",
+          "public_fields": [
+            "id",
+            "game_id",
+            "winner_side",
+            "winner_ln_address",
+            "payout_amount",
+            "created_at"
+          ]
+        },
+        {
+          "table_name": "streetfighter_payout_receipts",
+          "source_id_field": "game_id",
+          "public_fields": [
+            "id",
+            "game_id",
+            "winner_side",
+            "paid_at"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ext.storage.write",
+      "description": "Write StreetFighter settings, games, player records, and payment state."
+    },
+    {
+      "id": "ext.storage.append_public",
+      "description": "Allow a paid public fighter to submit one winner claim per match.",
+      "policies": [
+        {
+          "table": "streetfighter_winner_claims",
+          "source_table": "streetfighter_games",
+          "source_id_field": "game_id",
+          "allowed_fields": [
+            "winner_side",
+            "winner_ln_address",
+            "player_token",
+            "payout_amount",
+            "created_at"
+          ],
+          "max_rows_per_source": 1
+        },
+        {
+          "table": "streetfighter_payout_receipts",
+          "source_table": "streetfighter_games",
+          "source_id_field": "game_id",
+          "allowed_fields": [
+            "winner_side",
+            "paid_at"
+          ],
+          "max_rows_per_source": 1
+        }
+      ]
+    },
+    {
+      "id": "wallet.list",
+      "description": "Show the installing user's wallets for StreetFighter receipts."
+    },
+    {
+      "id": "wallet.create_invoice_public",
+      "description": "Create public join invoices for configured StreetFighter wallets.",
+      "policies": [
+        {
+          "table": "streetfighter_settings",
+          "wallet_field": "wallet_id"
+        }
+      ]
+    },
+    {
+      "id": "wallet.pay_invoice",
+      "description": "Pay StreetFighter winner payouts to Lightning addresses."
+    },
+    {
+      "id": "wallet.pay_invoice_background",
+      "description": "Pay the winner from an owner-approved StreetFighter wallet after a public match ends."
+    },
+    {
+      "id": "websocket.publish",
+      "description": "Broadcast StreetFighter match lifecycle messages through LNbits.",
+      "policies": [
+        {
+          "max_messages_per_second": 10
+        }
+      ]
+    },
+    {
+      "id": "websocket.subscribe",
+      "description": "Subscribe StreetFighter players to match movement and troll box updates."
+    }
+  ]
+}

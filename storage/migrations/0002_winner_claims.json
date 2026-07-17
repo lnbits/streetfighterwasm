@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "description": "Store payout wallet on matches and add one-shot public winner claims.",
+  "operations": [
+    {
+      "op": "add_field",
+      "table": "streetfighter_games",
+      "field": "wallet_id",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "op": "create_table",
+      "table": "streetfighter_winner_claims",
+      "fields": [
+        {"name": "id", "type": "string"},
+        {"name": "game_id", "type": "string"},
+        {"name": "winner_side", "type": "string"},
+        {"name": "winner_ln_address", "type": "string"},
+        {"name": "player_token", "type": "string"},
+        {"name": "payout_amount", "type": "integer"},
+        {"name": "created_at", "type": "datetime"}
+      ]
+    },
+    {
+      "op": "create_index",
+      "table": "streetfighter_winner_claims",
+      "name": "streetfighter_claims_by_game",
+      "field": "game_id"
+    }
+  ]
+}
