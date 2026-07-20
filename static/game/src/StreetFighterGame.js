@@ -8,7 +8,12 @@ import { BattleScene } from './scenes/BattleScene.js';
 import { GAME_SPEED } from './constants/game.js';
 import { StartScene } from './scenes/StartScene.js';
 import { ContextHandler } from './engine/ContextHandler.js';
-import { isMuted, registerAudioUnlockEvents, setMuted } from './engine/SoundHandler.js';
+import {
+	isMuted,
+	registerAudioUnlockEvents,
+	setMuted,
+	unlockAudio,
+} from './engine/SoundHandler.js';
 
 export class StreetFighterGame {
 	context = getContext();
@@ -82,6 +87,7 @@ export class StreetFighterGame {
 		window.STREETFIGHTER_AUDIO = {
 			isMuted,
 			setMuted,
+			unlockAudio,
 		};
 		setMuted(window.STREETFIGHTER_MUTED === true);
 		registerAudioUnlockEvents();

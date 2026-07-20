@@ -17,8 +17,10 @@ const state = {
   roundStarted: false,
   serverClockOffsetMs: 0,
   stateSequence: 0,
+  inputSequence: 0,
   lastAppliedStateSequence: 0,
   lastInputJson: '',
+  lastInputSentAt: 0,
   gameStarted: false,
   winnerDeclarationPending: false,
   winnerDeclaredSide: ''
@@ -26,6 +28,7 @@ const state = {
 
 const GAME_POLL_INTERVAL_MS = 1000
 const INPUT_PUBLISH_INTERVAL_MS = 33
+const INPUT_KEEPALIVE_MS = 180
 const STATE_PUBLISH_INTERVAL_MS = 33
 
 window.STREETFIGHTER_CAN_PLAY = false
@@ -60,7 +63,7 @@ const chatButton = document.querySelector('#chat-button')
 const chatList = document.querySelector('#chat-list')
 const soundToggle = document.querySelector('#sound-toggle')
 
-window.STREETFIGHTER_MUTED = savedMutedPreference()
+window.STREETFIGHTER_MUTED = true
 
 joinButton.addEventListener('click', async event => {
   event.preventDefault()
@@ -114,7 +117,7 @@ chatButton.addEventListener('click', () => {
 
 soundToggle?.addEventListener('click', event => {
   event.preventDefault()
-  setMutedPreference(!window.STREETFIGHTER_MUTED)
+  setMutedPreference(!window.STREETFIGHTER_MUTED, { userGesture: true })
 })
 
 window.addEventListener('streetfighter:winner', async event => {
@@ -153,15 +156,7 @@ async function init() {
   window.addEventListener('beforeunload', cleanup)
 }
 
-function savedMutedPreference() {
-  try {
-    return window.localStorage?.getItem('streetfighterwasm-muted') === 'true'
-  } catch (error) {
-    return false
-  }
-}
-
-function setMutedPreference(muted) {
+function setMutedPreference(muted, options = {}) {
   window.STREETFIGHTER_MUTED = muted === true
   try {
     window.localStorage?.setItem('streetfighterwasm-muted', String(window.STREETFIGHTER_MUTED))
@@ -169,6 +164,9 @@ function setMutedPreference(muted) {
     // Some sandboxed browsers can deny localStorage; the in-memory flag is enough.
   }
   window.STREETFIGHTER_AUDIO?.setMuted?.(window.STREETFIGHTER_MUTED)
+  if (!window.STREETFIGHTER_MUTED && options.userGesture === true) {
+    window.STREETFIGHTER_AUDIO?.unlockAudio?.()
+  }
   updateSoundToggle()
 }
 
@@ -348,9 +346,9 @@ async function configureRealtime() {
       INPUT_PUBLISH_INTERVAL_MS
     )
   }
-  if (state.player?.side === 'ryu' && !state.statePublishTimer) {
+  if (!state.statePublishTimer) {
     state.statePublishTimer = window.setInterval(
-      publishAuthoritativeState,
+      publishLocalFighterState,
       STATE_PUBLISH_INTERVAL_MS
     )
   }
@@ -413,10 +411,12 @@ function stopRealtime() {
   state.roundStarting = false
   state.roundStarted = false
   state.stateSequence = 0
+  state.inputSequence = 0
   state.lastAppliedStateSequence = 0
   window.STREETFIGHTER_ROUND_STARTING = false
   window.STREETFIGHTER_IS_AUTHORITY = false
   state.lastInputJson = ''
+  state.lastInputSentAt = 0
   window.STREETFIGHTER_INPUT?.clearRemoteInputs?.()
 }
 
@@ -478,13 +478,22 @@ async function publishLocalInput() {
   const input = window.STREETFIGHTER_INPUT.getLocalInputSnapshot()
   if (!input) return
   const inputJson = JSON.stringify(input)
-  if (inputJson === state.lastInputJson) return
+  const now = Date.now()
+  if (
+    inputJson === state.lastInputJson &&
+    now - Number(state.lastInputSentAt || 0) < INPUT_KEEPALIVE_MS
+  ) {
+    return
+  }
   state.lastInputJson = inputJson
+  state.lastInputSentAt = now
+  state.inputSequence += 1
   try {
     await sendRealtimeOrHttp(
       {
         type: 'input',
         side: state.player.side,
+        sequence: state.inputSequence,
         input
       },
       () => client.publishInput(state.gameId, {
@@ -497,16 +506,17 @@ async function publishLocalInput() {
   }
 }
 
-async function publishAuthoritativeState() {
+async function publishLocalFighterState() {
   if (
     state.game?.status !== 'active' ||
     !state.roundStarted ||
-    state.player?.side !== 'ryu' ||
-    !window.STREETFIGHTER_BATTLE?.getNetworkSnapshot
+    !state.player ||
+    !window.STREETFIGHTER_BATTLE?.getLocalFighterSnapshot
   ) {
     return
   }
-  const snapshot = window.STREETFIGHTER_BATTLE.getNetworkSnapshot()
+  const playerIndex = state.player.side === 'ken' ? 1 : 0
+  const snapshot = window.STREETFIGHTER_BATTLE.getLocalFighterSnapshot(playerIndex)
   if (!snapshot) return
   state.stateSequence += 1
   try {
@@ -516,7 +526,7 @@ async function publishAuthoritativeState() {
     }
     await sendRealtimeOrHttp(
       {
-        type: 'state',
+        type: 'fighter_state',
         side: state.player.side,
         state: networkState
       },
@@ -537,7 +547,11 @@ function handleRealtimeMessage(event) {
     if (!state.roundStarted) return
     if (data.side === state.player?.side) return
     const playerIndex = data.side === 'ken' ? 1 : 0
-    window.STREETFIGHTER_INPUT?.setRemoteInput?.(playerIndex, data.input || {})
+    window.STREETFIGHTER_INPUT?.setRemoteInput?.(
+      playerIndex,
+      data.input || {},
+      {sequence: Number(data.sequence || 0)}
+    )
     return
   }
   if (data.type === 'chat') {
@@ -561,9 +575,29 @@ function handleRealtimeMessage(event) {
     scheduleRoundStart(data)
     return
   }
+  if (data.type === 'fighter_state') {
+    applyPeerFighterState(data.side, data.state)
+    return
+  }
   if (data.type === 'state') {
     applyAuthoritativeState(data.state)
   }
+}
+
+function applyPeerFighterState(side, snapshot) {
+  if (
+    side === state.player?.side ||
+    !state.roundStarted ||
+    !window.STREETFIGHTER_BATTLE?.receivePeerFighterSnapshot
+  ) {
+    return
+  }
+  const sequence = Number(snapshot?.sequence || 0)
+  if (sequence && sequence <= state.lastAppliedStateSequence) return
+  if (sequence) state.lastAppliedStateSequence = sequence
+  window.STREETFIGHTER_BATTLE.receivePeerFighterSnapshot(snapshot, {
+    remotePlayerIndex: side === 'ken' ? 1 : 0
+  })
 }
 
 function applyAuthoritativeState(snapshot) {

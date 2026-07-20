@@ -23,6 +23,8 @@ const heldKeys = new Set();
 const pressedKeys = new Set();
 const pressedKeysControlHistory = [new Set(), new Set()];
 const remoteInputs = [null, null];
+const remoteInputSequences = [0, 0];
+const remoteInputTimes = [0, 0];
 const remotePressedControls = [new Set(), new Set()];
 const mappedKeys = controls
 	.map(({ keyboard }) => Object.values(keyboard))
@@ -41,6 +43,8 @@ const remoteControlNames = {
 	[Control.HEAVY_KICK]: 'heavyKick',
 };
 
+const REMOTE_INPUT_STALE_MS = 500;
+
 const getLocalPlayerId = () => {
 	if (!window.STREETFIGHTER_CAN_PLAY) return undefined;
 	const id = Number(window.STREETFIGHTER_LOCAL_PLAYER_INDEX);
@@ -54,7 +58,13 @@ const getControlProfileId = (id) => {
 
 const getRemoteInput = (id) => {
 	if (getControlProfileId(id) !== undefined) return null;
-	return remoteInputs[id] || null;
+	if (!remoteInputs[id]) return null;
+	if (Date.now() - Number(remoteInputTimes[id] || 0) > REMOTE_INPUT_STALE_MS) {
+		remoteInputs[id] = null;
+		remotePressedControls[id].clear();
+		return null;
+	}
+	return remoteInputs[id];
 };
 
 const clearPressedControlHistory = (code) => {
@@ -303,9 +313,13 @@ export const isHeavyKick = (id, forControlHistory = false) => {
 	return isKeyPressed(id, Control.HEAVY_KICK, forControlHistory);
 };
 
-export const setRemoteInput = (id, input = {}) => {
+export const setRemoteInput = (id, input = {}, meta = {}) => {
 	if (!Number.isInteger(id) || id < 0 || id >= controls.length) return;
 	if (window.STREETFIGHTER_MATCH_ENDED) return;
+	const sequence = Number(meta.sequence || input.sequence || 0);
+	if (sequence && sequence <= remoteInputSequences[id]) return;
+	if (sequence) remoteInputSequences[id] = sequence;
+	remoteInputTimes[id] = Date.now();
 	remoteInputs[id] = {
 		left: input.left === true,
 		right: input.right === true,
@@ -323,6 +337,10 @@ export const setRemoteInput = (id, input = {}) => {
 export const clearRemoteInputs = () => {
 	remoteInputs[0] = null;
 	remoteInputs[1] = null;
+	remoteInputSequences[0] = 0;
+	remoteInputSequences[1] = 0;
+	remoteInputTimes[0] = 0;
+	remoteInputTimes[1] = 0;
 	remotePressedControls[0].clear();
 	remotePressedControls[1].clear();
 };

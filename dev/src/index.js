@@ -402,11 +402,9 @@ export function publishStreetfighterState(requestJson) {
     const game = getGame(gameId)
     const player = requireActivePlayer(game, token)
     if (game.status !== 'active') throw new Error('Only active matches can receive state.')
-    if (player.side !== 'ryu') throw new Error('Only Ryu can publish match state.')
-
-    const state = normalizeGameState(request.state)
+    const state = normalizeNetworkState(request.state)
     publishGameMessage(gameId, {
-      type: 'state',
+      type: state.fighter ? 'fighter_state' : 'state',
       side: player.side,
       state,
       sentAt: system.now()
@@ -689,6 +687,24 @@ function normalizeInput(value) {
   }
 }
 
+function normalizeNetworkState(value) {
+  if (value?.fighter && !value?.fighters) {
+    return normalizePeerFighterState(value)
+  }
+  return normalizeGameState(value)
+}
+
+function normalizePeerFighterState(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('state must be an object.')
+  }
+  return {
+    sequence: normalizeInteger(value.sequence, 0, 0, 1000000000),
+    fighter: normalizeFighterState(value.fighter),
+    fireballs: normalizeFireballs(value.fireballs)
+  }
+}
+
 function normalizeGameState(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('state must be an object.')
@@ -708,16 +724,21 @@ function normalizeFighterStates(value) {
   if (!Array.isArray(value) || value.length !== 2) {
     throw new Error('state.fighters must contain two fighters.')
   }
-  return value.map(fighter => ({
+  return value.map(fighter => normalizeFighterState(fighter))
+}
+
+function normalizeFighterState(fighter) {
+  return {
     position: normalizePoint(fighter?.position, -10000, 10000),
     velocity: normalizePoint(fighter?.velocity, -10000, 10000),
     direction: Number(fighter?.direction) < 0 ? -1 : 1,
     currentState: cleanText(fighter?.currentState, 64),
     animationFrame: normalizeInteger(fighter?.animationFrame, 0, 0, 1000),
+    grounded: fighter?.grounded === true,
     hitPoints: normalizeInteger(fighter?.hitPoints, 200, 0, 200),
     score: normalizeInteger(fighter?.score, 0, 0, 1000000000),
     victory: fighter?.victory === true
-  }))
+  }
 }
 
 function normalizeFireballs(value) {

@@ -1,5 +1,6 @@
 import {
 	SCENE_WIDTH,
+	STAGE_FLOOR,
 	STAGE_MID_POINT,
 	STAGE_PADDING,
 } from '../constants/stage.js';
@@ -27,6 +28,15 @@ import { KenStage } from '../entitites/stage/KenStage.js';
 import { gameState, resetGameState } from '../states/gameState.js';
 import { StartScene } from './StartScene.js';
 
+const AIRBORNE_FIGHTER_STATES = new Set([
+	FighterState.JUMP_START,
+	FighterState.JUMP_UP,
+	FighterState.JUMP_FORWARD,
+	FighterState.JUMP_BACKWARD,
+]);
+const PEER_RENDER_DELAY_MS = 80;
+const PEER_BUFFER_LIMIT = 8;
+
 export class BattleScene {
 	image = document.getElementById('Winner');
 	fighters = [];
@@ -37,6 +47,7 @@ export class BattleScene {
 	battleEnded = false;
 	winnerId = undefined;
 	networkFinishHandled = false;
+	peerFighterSnapshots = [[], []];
 
 	constructor(changeScene) {
 		this.changeScene = changeScene;
@@ -50,6 +61,8 @@ export class BattleScene {
 		this.startRound();
 		window.STREETFIGHTER_BATTLE = {
 			getNetworkSnapshot: this.getNetworkSnapshot,
+			getLocalFighterSnapshot: this.getLocalFighterSnapshot,
+			receivePeerFighterSnapshot: this.receivePeerFighterSnapshot,
 			applyNetworkSnapshot: this.applyNetworkSnapshot,
 		};
 	}
@@ -228,8 +241,134 @@ export class BattleScene {
 				direction: fireball.direction,
 				currentState: fireball.currentState,
 				animationFrame: fireball.animationFrame,
-			})),
+		})),
 	});
+
+	getFighterSnapshot = (index) => {
+		const fighter = this.fighters[index];
+		if (!fighter) return null;
+		return {
+			position: {
+				x: fighter.position.x,
+				y: fighter.position.y,
+			},
+			velocity: {
+				x: fighter.velocity.x,
+				y: fighter.velocity.y,
+			},
+			direction: fighter.direction,
+			currentState: fighter.currentState,
+			animationFrame: fighter.animationFrame,
+			grounded:
+				fighter.position.y >= STAGE_FLOOR - 1 &&
+				!AIRBORNE_FIGHTER_STATES.has(fighter.currentState),
+			hitPoints: gameState.fighters[index].hitPoints,
+			score: gameState.fighters[index].score,
+			victory: fighter.victory,
+		};
+	};
+
+	getLocalFighterSnapshot = (index) => {
+		const fighter = this.getFighterSnapshot(index);
+		if (!fighter) return null;
+		return {
+			fighter,
+			fireballs: this.entities.entitiesList
+				.filter(
+					(entity) =>
+						entity instanceof Fireball && entity.fighter.playerId === index
+				)
+				.map((fireball) => ({
+					ownerId: fireball.fighter.playerId,
+					strength: fireball.strength,
+					position: {
+						x: fireball.position.x,
+						y: fireball.position.y,
+					},
+					direction: fireball.direction,
+					currentState: fireball.currentState,
+					animationFrame: fireball.animationFrame,
+				})),
+		};
+	};
+
+	receivePeerFighterSnapshot = (snapshot = {}, { remotePlayerIndex = null } = {}) => {
+		if (!Number.isInteger(remotePlayerIndex) || !this.fighters[remotePlayerIndex]) return;
+		if (!snapshot?.fighter) return;
+		const buffer = this.peerFighterSnapshots[remotePlayerIndex];
+		buffer.push({ ...snapshot, receivedAtMs: performance.now() });
+		if (buffer.length > PEER_BUFFER_LIMIT) {
+			buffer.splice(0, buffer.length - PEER_BUFFER_LIMIT);
+		}
+	};
+
+	applyBufferedPeerFighterSnapshots = () => {
+		for (const [index, buffer] of this.peerFighterSnapshots.entries()) {
+			if (!buffer.length) continue;
+			const snapshot = this.interpolatedPeerSnapshot(buffer);
+			this.applyPeerFighterSnapshot(index, snapshot);
+		}
+	};
+
+	interpolatedPeerSnapshot = (buffer) => {
+		if (buffer.length === 1) return buffer[0];
+		const targetTime = performance.now() - PEER_RENDER_DELAY_MS;
+		while (buffer.length > 2 && buffer[1].receivedAtMs <= targetTime) {
+			buffer.shift();
+		}
+		const older = buffer[0];
+		const newer = buffer[1] || older;
+		const span = Math.max(1, newer.receivedAtMs - older.receivedAtMs);
+		const alpha = Math.min(1, Math.max(0, (targetTime - older.receivedAtMs) / span));
+		return {
+			...newer,
+			fighter: {
+				...newer.fighter,
+				position: this.interpolatePoint(
+					older.fighter?.position,
+					newer.fighter?.position,
+					alpha
+				),
+			},
+		};
+	};
+
+	interpolatePoint = (older = {}, newer = {}, alpha) => {
+		const oldX = Number(older?.x);
+		const oldY = Number(older?.y);
+		const newX = Number(newer?.x);
+		const newY = Number(newer?.y);
+		if (
+			!Number.isFinite(oldX) ||
+			!Number.isFinite(oldY) ||
+			!Number.isFinite(newX) ||
+			!Number.isFinite(newY)
+		) {
+			return newer;
+		}
+		return {
+			x: oldX + (newX - oldX) * alpha,
+			y: oldY + (newY - oldY) * alpha,
+		};
+	};
+
+	applyPeerFighterSnapshot = (index, snapshot = {}) => {
+		const fighter = this.fighters[index];
+		const fighterState = snapshot.fighter;
+		if (!fighter || !fighterState) return;
+		this.applyRemoteFighterState(fighter, fighterState, true);
+		fighter.velocity.x = Number(fighterState.velocity?.x ?? fighter.velocity.x);
+		fighter.velocity.y = Number(fighterState.velocity?.y ?? fighter.velocity.y);
+		fighter.direction = Number(fighterState.direction) < 0 ? -1 : 1;
+		fighter.victory = fighterState.victory === true;
+		gameState.fighters[index].hitPoints = Number(
+			fighterState.hitPoints ?? gameState.fighters[index].hitPoints
+		);
+		gameState.fighters[index].score = Number(
+			fighterState.score ?? gameState.fighters[index].score
+		);
+		this.applyNetworkFireballs(snapshot.fireballs, 1 - index);
+	};
 
 	applyNetworkSnapshot = (
 		snapshot = {},
@@ -259,19 +398,11 @@ export class BattleScene {
 			if (!fighter || !fighterState) return;
 			const preserveLocalFighter = index === localPlayerIndex && !this.battleEnded;
 			if (!preserveLocalFighter) {
-				fighter.position.x = Number(fighterState.position?.x ?? fighter.position.x);
-				fighter.position.y = Number(fighterState.position?.y ?? fighter.position.y);
+				this.applyRemoteFighterState(fighter, fighterState, preserveAnimations);
 				fighter.velocity.x = Number(fighterState.velocity?.x ?? fighter.velocity.x);
 				fighter.velocity.y = Number(fighterState.velocity?.y ?? fighter.velocity.y);
 				fighter.direction = Number(fighterState.direction) < 0 ? -1 : 1;
 				fighter.victory = fighterState.victory === true;
-				if (!preserveAnimations && fighter.animations[fighterState.currentState]) {
-					fighter.currentState = fighterState.currentState;
-					fighter.setAnimationFrame(
-						Number(fighterState.animationFrame || 0),
-						{ previous: 0 }
-					);
-				}
 			} else {
 				this.correctLocalFighterDrift(fighter, fighterState);
 			}
@@ -288,6 +419,23 @@ export class BattleScene {
 		if (this.battleEnded && !this.networkFinishHandled) {
 			this.networkFinishHandled = true;
 			this.applyNetworkFinish();
+		}
+	};
+
+	applyRemoteFighterState = (fighter, fighterState = {}, preserveAnimations) => {
+		fighter.position.x = Number(fighterState.position?.x ?? fighter.position.x);
+		fighter.position.y = Number(fighterState.position?.y ?? fighter.position.y);
+		if (fighter.animations[fighterState.currentState]) {
+			const stateChanged = fighter.currentState !== fighterState.currentState;
+			fighter.currentState = fighterState.currentState;
+			if (!preserveAnimations || stateChanged) {
+				fighter.setAnimationFrame(
+					Number(fighterState.animationFrame || 0),
+					{ previous: 0 }
+				);
+			} else if (!fighter.animations[fighter.currentState]?.[fighter.animationFrame]) {
+				fighter.setAnimationFrame(0, { previous: 0 });
+			}
 		}
 	};
 
@@ -356,6 +504,7 @@ export class BattleScene {
 
 	update = (time) => {
 		this.updateFighters(time);
+		this.applyBufferedPeerFighterSnapshots();
 		this.updateShadows(time);
 		this.stage.update(time);
 		this.entities.update(time, this.camera);

@@ -813,6 +813,10 @@ export class Fighter {
 
 	updateAnimation = (time) => {
 		const animation = this.animations[this.currentState];
+		if (!animation?.[this.animationFrame]) {
+			this.setAnimationFrame(0, time);
+			return;
+		}
 		if (
 			animation[this.animationFrame][1] <= FrameDelay.FREEZE ||
 			time.previous <= this.animationTimer
@@ -924,6 +928,10 @@ export class Fighter {
 	};
 
 	draw = (context, camera) => {
+		const animation = this.animations[this.currentState];
+		if (!animation?.[this.animationFrame]) {
+			this.setAnimationFrame(0, { previous: 0 });
+		}
 		const frameKey = this.animations[this.currentState][this.animationFrame][0];
 		const [[[x, y, width, height], [originX, originY]]] =
 			this.frames.get(frameKey);
