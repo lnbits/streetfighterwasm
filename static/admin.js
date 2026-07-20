@@ -368,15 +368,6 @@ const app = Vue.createApp({
                     icon: 'content_copy',
                     onClick: () => this.copyGame(props.row)
                   }),
-                  h(q('QBtn'), {
-                    flat: true,
-                    round: true,
-                    dense: true,
-                    icon: 'open_in_new',
-                    type: 'a',
-                    href: this.publicUrl(props.row),
-                    target: '_blank'
-                  }),
                   props.row.payoutPending
                     ? h(q('QBtn'), {
                         flat: true,
