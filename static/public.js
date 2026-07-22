@@ -199,7 +199,7 @@ async function renderGame() {
   gameStatus.textContent = statusText(game, state.player)
   playersStat.textContent = `${game.playersCount} / 2`
   amountStat.textContent = `${game.joinAmount} sats`
-  haircutStat.textContent = 'winner takes all'
+  haircutStat.textContent = `${game.haircut}%`
   joinFormColumn.hidden = response.canJoin !== true || !!state.player
   renderPlayers(response.players || [], state.player)
   updateFightOverlay(game, state.player)

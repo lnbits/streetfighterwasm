@@ -23,10 +23,11 @@
         return this.notify(message, 'negative')
       },
 
-      requestBackgroundPaymentPermission(grant) {
+      requestBackgroundPaymentPermission(grant, options = {}) {
         return bridgeRequest({
           action: 'permissions.request_background_payment',
-          grant
+          grant,
+          forcePrompt: options.forcePrompt === true
         })
       },
 

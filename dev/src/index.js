@@ -4,6 +4,7 @@ const SETTINGS_TABLE = 'streetfighter_settings'
 const GAMES_TABLE = 'streetfighter_games'
 const PLAYERS_TABLE = 'streetfighter_players'
 const SETTINGS_ID = 'streetfighterwasm-settings'
+const MIN_JOIN_SATS = 20
 const GAME_SEARCH_FIELDS = ['name', 'winner_ln_address', 'status']
 const SIDES = ['ryu', 'ken']
 
@@ -23,7 +24,7 @@ export function saveStreetfighterSettings(requestJson) {
       wallet_id: walletId,
       wallet_name: walletName || walletId,
       enabled: request.enabled === true,
-      haircut: 0,
+      haircut: normalizeInteger(request.haircut, 0, 0, 100),
       created_at: existing.created_at || now,
       updated_at: now
     }
@@ -51,8 +52,8 @@ export function createStreetfighterGame(requestJson) {
     const joinAmount = normalizeInteger(
       request.joinAmount ?? request.join_amount,
       100,
-      1,
-      100000000
+      MIN_JOIN_SATS,
+      Number.MAX_SAFE_INTEGER
     )
     const now = system.now()
     const game = {
@@ -61,7 +62,7 @@ export function createStreetfighterGame(requestJson) {
       wallet_id: settings.wallet_id,
       name: cleanText(request.name, 80) || 'Paid StreetFighter match',
       join_amount: joinAmount,
-      haircut: 0,
+      haircut: Number(settings.haircut || 0),
       players_count: 0,
       status: 'waiting',
       ryu_ln_address: '',
@@ -598,7 +599,9 @@ function requireActivePlayer(game, token) {
 }
 
 function payoutAmount(game) {
-  return Math.max(0, Math.trunc(Number(game.join_amount || 0) * 2))
+  const total = Number(game.join_amount || 0) * 2
+  const haircut = total * (Number(game.haircut || 0) / 100)
+  return Math.max(0, Math.trunc(total - haircut))
 }
 
 function payWinner({walletId, lnAddress, maxSat, description, gameId, side}) {
@@ -856,7 +859,7 @@ function normalizePageSize(value) {
 
 function normalizeGameSortBy(value) {
   const field = cleanText(value, 80)
-  if (['name', 'join_amount', 'players_count', 'status', 'created_at', 'updated_at'].includes(field)) {
+  if (['name', 'join_amount', 'haircut', 'players_count', 'status', 'created_at', 'updated_at'].includes(field)) {
     return field
   }
   const camelToSnake = {
