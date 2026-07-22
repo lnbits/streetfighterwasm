@@ -2,7 +2,7 @@
   "id": "streetfighterwasm",
   "name": "StreetFighter",
   "short_description": "Create paid public StreetFighter matches where the winner takes the pot.",
-  "version": "0.0.28",
+  "version": "0.1.3",
   "min_lnbits_version": "1.5.6",
   "tile": "/streetfighterwasm/static/assets/tile.svg",
   "tags": ["gaming", "streetfighter", "wasm"],
